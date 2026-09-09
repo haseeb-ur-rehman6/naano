@@ -12,7 +12,7 @@
     "last_prompt_time": "2026-09-09T14:25:09.460Z"
   },
   "exchange_num": 4,
-  "awaiting_response": true,
+  "awaiting_response": false,
   "current_generation_id": "66f41ceb-bf0a-4ffc-987d-1470d37da90b",
   "pending_response": null
 }
