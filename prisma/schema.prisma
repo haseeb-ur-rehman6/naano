@@ -1,0 +1,256 @@
+// Prisma schema for Naano SaaS Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum Role {
+  BRAND
+  CREATOR
+  AGENCY
+  ADMIN
+}
+
+enum CampaignStatus {
+  DRAFT
+  PENDING
+  ACCEPTED
+  PAYMENT_PENDING
+  ACTIVE
+  CONTENT_REVIEW
+  APPROVED
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingStatus {
+  INVITED
+  PENDING
+  ACCEPTED
+  REJECTED
+  SUBMITTED
+  REVISION_REQUESTED
+  APPROVED
+  PUBLISHED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  ESCROWED
+  PAID_OUT
+  REFUNDED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  role          Role      @default(BRAND)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile       Profile?
+  brandProfile  BrandProfile?
+  creatorProfile CreatorProfile?
+  agencyProfile AgencyProfile?
+
+  createdCampaigns Campaign[]        @relation("BrandCampaigns")
+  contentReviews  ReviewComment[]   @relation("UserComments")
+  notifications   Notification[]
+  sentMessages    Message[]         @relation("SentMessages")
+  receivedMessages Message[]        @relation("ReceivedMessages")
+
+  @@index([email])
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String
+  avatarUrl   String?
+  country     String?
+  bio         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model BrandProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName    String
+  website        String?
+  industry       String
+  companySize    String
+  targetAudience String?
+  logoUrl        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model CreatorProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username       String   @unique
+  linkedinUrl    String
+  category       String   // e.g. "SaaS & Tech", "Productivity", "Marketing", "Finance"
+  followersCount Int
+  engagementRate Float    // e.g. 4.8 (%)
+  avgViews       Int      @default(5000)
+  avgReactions   Int      @default(350)
+  avgComments    Int      @default(65)
+  topics         String   // JSON string or comma-separated list
+  location       String
+  pricePerPost   Float
+  pricePackage3  Float
+  verified       Boolean  @default(true)
+  bio            String
+  samplePosts    String?  // JSON array of sample posts
+  audienceData   String?  // JSON string breakdown
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  campaignBookings CampaignCreator[]
+}
+
+model AgencyProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agencyName      String
+  website         String?
+  clientsCount    Int      @default(0)
+  managedCreators Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Campaign {
+  id             String         @id @default(uuid())
+  brandId        String
+  brand          User           @relation("BrandCampaigns", fields: [brandId], references: [id], onDelete: Cascade)
+  name           String
+  productName    String
+  description    String
+  objective      String         // e.g., "Awareness", "Leads", "Traffic", "Product Launch"
+  targetIndustry String
+  targetRoles    String
+  companySize    String
+  targetLocation String
+  totalBudget    Float
+  requiredCreators Int          @default(1)
+  topics         String
+  status         CampaignStatus @default(PENDING)
+  trackingCode   String         @unique @default(uuid())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  assignedCreators CampaignCreator[]
+  payments         Payment[]
+  clickEvents      ClickEvent[]
+  leads            Lead[]
+}
+
+model CampaignCreator {
+  id           String        @id @default(uuid())
+  campaignId   String
+  campaign     Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creatorId    String
+  creator      CreatorProfile @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  status       BookingStatus @default(PENDING)
+  agreedPrice  Float
+  payoutStatus PaymentStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  submissions  ContentSubmission[]
+
+  @@unique([campaignId, creatorId])
+}
+
+model ContentSubmission {
+  id                String          @id @default(uuid())
+  campaignCreatorId String
+  campaignCreator   CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+  postText          String
+  mediaUrl          String?
+  postLink          String?
+  status            String          @default("DRAFT_SUBMITTED") // DRAFT_SUBMITTED, REVISION_REQUESTED, APPROVED, PUBLISHED
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  reviewComments    ReviewComment[]
+}
+
+model ReviewComment {
+  id                  String            @id @default(uuid())
+  contentSubmissionId String
+  submission          ContentSubmission @relation(fields: [contentSubmissionId], references: [id], onDelete: Cascade)
+  authorId            String
+  author              User              @relation("UserComments", fields: [authorId], references: [id], onDelete: Cascade)
+  message             String
+  createdAt           DateTime          @default(now())
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  campaignId      String
+  campaign        Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  amount          Float
+  status          PaymentStatus @default(PENDING)
+  stripePaymentId String        @unique
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  text       String
+  createdAt  DateTime @default(now())
+}
+
+model ClickEvent {
+  id         String   @id @default(uuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ipAddress  String?
+  userAgent  String?
+  country    String?
+  referer    String?
+  timestamp  DateTime @default(now())
+}
+
+model Lead {
+  id         String   @id @default(uuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name       String?
+  email      String?
+  company    String?
+  status     String   @default("NEW")
+  createdAt  DateTime @default(now())
+}
